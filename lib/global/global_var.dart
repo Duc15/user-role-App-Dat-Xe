@@ -6,7 +6,7 @@ String userPhone = "";
 String userID = FirebaseAuth.instance.currentUser!.uid;
 double countRatingStars = 0.0;
 String titleStarsRating = "";
-String googleMapKey = "";
+String googleMapKey = "AIzaSyAtXrr4EycZZVdzzK6XqsO-WKSTP5zUuAA";
 String serverKeyFCM = "";
 
 const CameraPosition googlePlexInitialPosition = CameraPosition(
