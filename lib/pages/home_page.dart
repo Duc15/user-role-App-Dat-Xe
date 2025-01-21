@@ -21,6 +21,7 @@ import 'package:users_app/methods/manage_drivers_methods.dart';
 import 'package:users_app/methods/push_notification_service.dart';
 import 'package:users_app/models/direction_details.dart';
 import 'package:users_app/models/online_nearby_drivers.dart';
+import 'package:users_app/models/prediction_model.dart';
 import 'package:users_app/pages/about_page.dart';
 import 'package:users_app/pages/search_destination_page.dart';
 import 'package:users_app/pages/trips_history_page.dart';
@@ -38,8 +39,11 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  TextEditingController pickUpTextEditingController = TextEditingController();
   final Completer<GoogleMapController> googleMapCompleterController =
       Completer<GoogleMapController>();
+  TextEditingController destinationTextEditingController =
+      TextEditingController();
   GoogleMapController? controllerGoogleMap;
   Position? currentPositionOfUser;
   GlobalKey<ScaffoldState> sKey = GlobalKey<ScaffoldState>();
@@ -51,6 +55,7 @@ class _HomePageState extends State<HomePage> {
   double tripContainerHeight = 0;
   DirectionDetails? tripDirectionDetailsInfo;
   List<LatLng> polylineCoOrdinates = [];
+  List<PredictionModel> dropOffPredictionsPlacesList = [];
   Set<Polyline> polylineSet = {};
   Set<Marker> markerSet = {};
   Set<Circle> circleSet = {};
@@ -202,10 +207,10 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       Polyline polyline = Polyline(
         polylineId: const PolylineId("polylineID"),
-        color: Colors.pink,
+        color: Colors.blue,
         points: polylineCoOrdinates,
         jointType: JointType.round,
-        width: 4,
+        width: 6,
         startCap: Cap.roundCap,
         endCap: Cap.roundCap,
         geodesic: true,
@@ -426,6 +431,33 @@ class _HomePageState extends State<HomePage> {
         }
       }
     });
+  }
+
+  ///Places API - Place AutoComplete
+  searchLocation(String locationName) async {
+    if (locationName.length > 1) {
+      String apiPlacesUrl =
+          "https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$locationName&key=$googleMapKey&components=country:vn";
+
+      var responseFromPlacesAPI =
+          await CommonMethods.sendRequestToAPI(apiPlacesUrl);
+
+      if (responseFromPlacesAPI == "error") {
+        return;
+      }
+
+      if (responseFromPlacesAPI["status"] == "OK") {
+        var predictionResultInJson = responseFromPlacesAPI["predictions"];
+        var predictionsList = (predictionResultInJson as List)
+            .map((eachPlacePrediction) =>
+                PredictionModel.fromJson(eachPlacePrediction))
+            .toList();
+
+        setState(() {
+          dropOffPredictionsPlacesList = predictionsList;
+        });
+      }
+    }
   }
 
   makeTripRequest() {
@@ -887,27 +919,7 @@ class _HomePageState extends State<HomePage> {
       body: Stack(
         children: [
           ///google map
-          GoogleMap(
-            padding: EdgeInsets.only(top: 26, bottom: bottomMapPadding),
-            mapType: MapType.normal,
-            myLocationEnabled: true,
-            polylines: polylineSet,
-            markers: markerSet,
-            circles: circleSet,
-            initialCameraPosition: googlePlexInitialPosition,
-            onMapCreated: (GoogleMapController mapController) {
-              controllerGoogleMap = mapController;
-              updateMapTheme(controllerGoogleMap!);
-
-              googleMapCompleterController.complete(controllerGoogleMap);
-
-              setState(() {
-                bottomMapPadding = 300;
-              });
-
-              getCurrentLiveLocationOfUser();
-            },
-          ),
+          showMap(),
 
           ///drawer button
           Positioned(
@@ -945,424 +957,569 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
+          // điểm đón
+          pickUpPlace(context),
 
           ///search location icon button
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: -80,
-            child: Container(
-              height: searchContainerHeight,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  ElevatedButton(
-                    onPressed: () async {
-                      var responseFromSearchPage = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (c) => SearchDestinationPage()));
+          // Positioned(
+          //   left: 0,
+          //   right: 0,
+          //   bottom: -80,
+          //   child: Container(
+          //     height: searchContainerHeight,
+          //     child: Row(
+          //       mainAxisAlignment: MainAxisAlignment.spaceAround,
+          //       children: [
+          //         ElevatedButton(
+          //           onPressed: () async {
+          //             var responseFromSearchPage = await Navigator.push(
+          //                 context,
+          //                 MaterialPageRoute(
+          //                     builder: (c) => SearchDestinationPage()));
 
-                      if (responseFromSearchPage == "placeSelected") {
-                        displayUserRideDetailsContainer();
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        shape: const CircleBorder(),
-                        padding: const EdgeInsets.all(24)),
-                    child: const Icon(
-                      Icons.search,
-                      color: Colors.white,
-                      size: 25,
-                    ),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        shape: const CircleBorder(),
-                        padding: const EdgeInsets.all(24)),
-                    child: const Icon(
-                      Icons.home,
-                      color: Colors.white,
-                      size: 25,
-                    ),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {},
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        shape: const CircleBorder(),
-                        padding: const EdgeInsets.all(24)),
-                    child: const Icon(
-                      Icons.work,
-                      color: Colors.white,
-                      size: 25,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          //             if (responseFromSearchPage == "placeSelected") {
+          //               displayUserRideDetailsContainer();
+          //             }
+          //           },
+          //           style: ElevatedButton.styleFrom(
+          //               backgroundColor: Colors.grey,
+          //               shape: const CircleBorder(),
+          //               padding: const EdgeInsets.all(24)),
+          //           child: const Icon(
+          //             Icons.search,
+          //             color: Colors.white,
+          //             size: 25,
+          //           ),
+          //         ),
+          //         ElevatedButton(
+          //           onPressed: () {},
+          //           style: ElevatedButton.styleFrom(
+          //               backgroundColor: Colors.grey,
+          //               shape: const CircleBorder(),
+          //               padding: const EdgeInsets.all(24)),
+          //           child: const Icon(
+          //             Icons.home,
+          //             color: Colors.white,
+          //             size: 25,
+          //           ),
+          //         ),
+          //         ElevatedButton(
+          //           onPressed: () {},
+          //           style: ElevatedButton.styleFrom(
+          //               backgroundColor: Colors.grey,
+          //               shape: const CircleBorder(),
+          //               padding: const EdgeInsets.all(24)),
+          //           child: const Icon(
+          //             Icons.work,
+          //             color: Colors.white,
+          //             size: 25,
+          //           ),
+          //         ),
+          //       ],
+          //     ),
+          //   ),
+          // ),
 
           ///ride details container
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              height: rideDetailsContainerHeight,
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(15),
-                    topRight: Radius.circular(15)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.white12,
-                    blurRadius: 15.0,
-                    spreadRadius: 0.5,
-                    offset: Offset(.7, .7),
+          riderDetails(context),
+
+          ///request container
+          requestContainer(),
+
+          ///trip details container
+          tripDetails(),
+        ],
+      ),
+    );
+  }
+
+  GoogleMap showMap() {
+    return GoogleMap(
+      padding: EdgeInsets.only(top: 26, bottom: bottomMapPadding),
+      mapType: MapType.normal,
+      myLocationEnabled: true,
+      polylines: polylineSet,
+      markers: markerSet,
+      circles: circleSet,
+      initialCameraPosition: googlePlexInitialPosition,
+      onMapCreated: (GoogleMapController mapController) {
+        controllerGoogleMap = mapController;
+        updateMapTheme(controllerGoogleMap!);
+
+        googleMapCompleterController.complete(controllerGoogleMap);
+
+        setState(() {
+          bottomMapPadding = 300;
+        });
+
+        getCurrentLiveLocationOfUser();
+      },
+    );
+  }
+
+  Positioned pickUpPlace(BuildContext context) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        height: 200,
+        color: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.add_location_outlined,
+                  color: Colors.red,
+                ),
+                const SizedBox(
+                  width: 12.0,
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Vị trí hiện tại",
+                      style: TextStyle(color: Colors.black, fontSize: 12),
+                    ),
+                    Text(
+                      //location map
+                      Provider.of<AppInfo>(context, listen: false)
+                              .pickUpLocation
+                              ?.humanReadableAddress ??
+                          "Không thấy địa chỉ",
+                      style: const TextStyle(color: Colors.black, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(
+              height: 10.0,
+            ),
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: Colors.grey,
+            ),
+            const SizedBox(
+              height: 16.0,
+            ),
+            //địa chỉ đến
+            Row(
+              children: [
+                const Icon(
+                  Icons.add_location_outlined,
+                  color: Colors.red,
+                ),
+                const SizedBox(
+                  width: 12.0,
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Vị trí cần đến",
+                      style: TextStyle(color: Colors.black, fontSize: 12),
+                    ),
+                    GestureDetector(
+                      onTap: () async {
+                        var responseFromSearchPage = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (c) => SearchDestinationPage()));
+
+                        if (responseFromSearchPage == "placeSelected") {
+                          displayUserRideDetailsContainer();
+                        }
+                      },
+                      child: const Text(
+                        // Provider.of<AppInfo>(context)
+                        //             .userDropOffLocation !=
+                        //         null
+                        //     ? Provider.of<AppInfo>(context)
+                        //         .userDropOffLocation!
+                        //         .locationName!
+                        //     : "Đi đâu?",
+                        "Đi đâu?",
+                        style: TextStyle(color: Colors.black, fontSize: 14),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            const SizedBox(
+              height: 10.0,
+            ),
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: Colors.grey,
+            ),
+            const SizedBox(
+              height: 16.0,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Positioned tripDetails() {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        height: tripContainerHeight,
+        decoration: const BoxDecoration(
+          color: Colors.black87,
+          borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.white24,
+              blurRadius: 15.0,
+              spreadRadius: 0.5,
+              offset: Offset(
+                0.7,
+                0.7,
+              ),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(
+                height: 5,
+              ),
+
+              //trip status display text
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    tripStatusDisplay,
+                    style: const TextStyle(
+                      fontSize: 19,
+                      color: Colors.grey,
+                    ),
                   ),
                 ],
               ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: 16, right: 16),
-                      child: SizedBox(
-                        height: 190,
-                        child: Card(
-                          elevation: 10,
-                          child: Container(
-                              width: MediaQuery.of(context).size.width * .70,
-                              color: Colors.black45,
-                              child: Padding(
+
+              const SizedBox(
+                height: 19,
+              ),
+
+              const Divider(
+                height: 1,
+                color: Colors.white70,
+                thickness: 1,
+              ),
+
+              const SizedBox(
+                height: 19,
+              ),
+
+              //image - driver name and driver car details
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  ClipOval(
+                    child: Image.network(
+                      photoDriver == ''
+                          ? "https://cdn" //change tofirebase photo
+                          : photoDriver,
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(
+                    width: 8,
+                  ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nameDriver,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      Text(
+                        carDetailsDriver,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+
+              const SizedBox(
+                height: 19,
+              ),
+
+              const Divider(
+                height: 1,
+                color: Colors.white70,
+                thickness: 1,
+              ),
+
+              const SizedBox(
+                height: 19,
+              ),
+
+              //call driver btn
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      launchUrl(
+                          Uri.parse("Số điện thoại://$phoneNumberDriver"));
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Container(
+                          height: 50,
+                          width: 50,
+                          decoration: BoxDecoration(
+                            borderRadius:
+                                const BorderRadius.all(Radius.circular(25)),
+                            border: Border.all(
+                              width: 1,
+                              color: Colors.white,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.phone,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(
+                          height: 11,
+                        ),
+                        const Text(
+                          "Gọi tài xế",
+                          style: TextStyle(
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Positioned requestContainer() {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        height: requestContainerHeight,
+        decoration: const BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black26,
+              blurRadius: 15.0,
+              spreadRadius: 0.5,
+              offset: Offset(
+                0.7,
+                0.7,
+              ),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const SizedBox(
+                height: 12,
+              ),
+              SizedBox(
+                width: 200,
+                child: LoadingAnimationWidget.flickr(
+                  leftDotColor: Colors.greenAccent,
+                  rightDotColor: Colors.pinkAccent,
+                  size: 50,
+                ),
+              ),
+              const SizedBox(
+                height: 20,
+              ),
+              GestureDetector(
+                onTap: () {
+                  //resetAppNow();
+                  cancelRideRequest();
+                },
+                child: Container(
+                  height: 50,
+                  width: 50,
+                  decoration: BoxDecoration(
+                    color: Colors.white70,
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(width: 1.5, color: Colors.grey),
+                  ),
+                  child: const Icon(
+                    Icons.close,
+                    color: Colors.black,
+                    size: 25,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Positioned riderDetails(BuildContext context) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        height: rideDetailsContainerHeight,
+        decoration: const BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(15), topRight: Radius.circular(15)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.white12,
+              blurRadius: 15.0,
+              spreadRadius: 0.5,
+              offset: Offset(.7, .7),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 16, right: 16),
+                child: SizedBox(
+                  height: 190,
+                  child: Card(
+                    elevation: 10,
+                    child: Container(
+                        width: MediaQuery.of(context).size.width * .70,
+                        color: Colors.black45,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 8, bottom: 8),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Padding(
                                 padding:
-                                    const EdgeInsets.only(top: 8, bottom: 8),
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                                    const EdgeInsets.only(left: 8, right: 8),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                          left: 8, right: 8),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            (tripDirectionDetailsInfo != null)
-                                                ? tripDirectionDetailsInfo!
-                                                    .distanceTextString!
-                                                : "",
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              color: Colors.white70,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          Text(
-                                            (tripDirectionDetailsInfo != null)
-                                                ? tripDirectionDetailsInfo!
-                                                    .durationTextString!
-                                                : "",
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              color: Colors.white70,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          stateOfApp = "requesting";
-                                        });
-
-                                        displayRequestContainer();
-
-                                        // get nearest available online drivers
-                                        availableNearbyOnlineDriversList =
-                                            ManageDriversMethods
-                                                .nearbyOnlineDriversList;
-
-                                        // search driver
-                                        searchDriver();
-                                      },
-                                      child: Image.asset(
-                                        "assets/images/uberexec.png",
-                                        height: 110,
-                                        width: 110,
-                                      ),
-                                    ),
-                                    // Hàm chuyển đổi tiền tệ USD sang VND
                                     Text(
                                       (tripDirectionDetailsInfo != null)
-                                          ? (cMethods.calculateFareAmount(
-                                                      tripDirectionDetailsInfo!) !=
-                                                  null
-                                              ? "${NumberFormat("#,###").format(double.parse(cMethods.calculateFareAmount(tripDirectionDetailsInfo!)) * 24000)} đ"
-                                              : "")
+                                          ? tripDirectionDetailsInfo!
+                                              .distanceTextString!
                                           : "",
                                       style: const TextStyle(
-                                        fontSize: 18,
+                                        fontSize: 16,
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      (tripDirectionDetailsInfo != null)
+                                          ? tripDirectionDetailsInfo!
+                                              .durationTextString!
+                                          : "",
+                                      style: const TextStyle(
+                                        fontSize: 16,
                                         color: Colors.white70,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ],
                                 ),
-                              )),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          ///request container
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              height: requestContainerHeight,
-              decoration: const BoxDecoration(
-                color: Colors.black54,
-                borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 15.0,
-                    spreadRadius: 0.5,
-                    offset: Offset(
-                      0.7,
-                      0.7,
-                    ),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(
-                      height: 12,
-                    ),
-                    SizedBox(
-                      width: 200,
-                      child: LoadingAnimationWidget.flickr(
-                        leftDotColor: Colors.greenAccent,
-                        rightDotColor: Colors.pinkAccent,
-                        size: 50,
-                      ),
-                    ),
-                    const SizedBox(
-                      height: 20,
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        //resetAppNow();
-                        cancelRideRequest();
-                      },
-                      child: Container(
-                        height: 50,
-                        width: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white70,
-                          borderRadius: BorderRadius.circular(25),
-                          border: Border.all(width: 1.5, color: Colors.grey),
-                        ),
-                        child: const Icon(
-                          Icons.close,
-                          color: Colors.black,
-                          size: 25,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          ///trip details container
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              height: tripContainerHeight,
-              decoration: const BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.white24,
-                    blurRadius: 15.0,
-                    spreadRadius: 0.5,
-                    offset: Offset(
-                      0.7,
-                      0.7,
-                    ),
-                  ),
-                ],
-              ),
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(
-                      height: 5,
-                    ),
-
-                    //trip status display text
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          tripStatusDisplay,
-                          style: const TextStyle(
-                            fontSize: 19,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(
-                      height: 19,
-                    ),
-
-                    const Divider(
-                      height: 1,
-                      color: Colors.white70,
-                      thickness: 1,
-                    ),
-
-                    const SizedBox(
-                      height: 19,
-                    ),
-
-                    //image - driver name and driver car details
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        ClipOval(
-                          child: Image.network(
-                            photoDriver == ''
-                                ? "https://cdn" //change tofirebase photo
-                                : photoDriver,
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        const SizedBox(
-                          width: 8,
-                        ),
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              nameDriver,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                color: Colors.grey,
                               ),
-                            ),
-                            Text(
-                              carDetailsDriver,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    stateOfApp = "requesting";
+                                  });
 
-                    const SizedBox(
-                      height: 19,
-                    ),
+                                  displayRequestContainer();
 
-                    const Divider(
-                      height: 1,
-                      color: Colors.white70,
-                      thickness: 1,
-                    ),
+                                  // get nearest available online drivers
+                                  availableNearbyOnlineDriversList =
+                                      ManageDriversMethods
+                                          .nearbyOnlineDriversList;
 
-                    const SizedBox(
-                      height: 19,
-                    ),
-
-                    //call driver btn
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            launchUrl(Uri.parse(
-                                "Số điện thoại://$phoneNumberDriver"));
-                          },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Container(
-                                height: 50,
-                                width: 50,
-                                decoration: BoxDecoration(
-                                  borderRadius: const BorderRadius.all(
-                                      Radius.circular(25)),
-                                  border: Border.all(
-                                    width: 1,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.phone,
-                                  color: Colors.white,
+                                  // search driver
+                                  searchDriver();
+                                },
+                                child: Image.asset(
+                                  "assets/images/uberexec.png",
+                                  height: 110,
+                                  width: 110,
                                 ),
                               ),
-                              const SizedBox(
-                                height: 11,
-                              ),
-                              const Text(
-                                "Gọi tài xế",
-                                style: TextStyle(
-                                  color: Colors.grey,
+                              // Hàm chuyển đổi tiền tệ USD sang VND
+                              Text(
+                                (tripDirectionDetailsInfo != null)
+                                    ? (cMethods.calculateFareAmount(
+                                                tripDirectionDetailsInfo!) !=
+                                            null
+                                        ? "${NumberFormat("#,###").format(double.parse(cMethods.calculateFareAmount(tripDirectionDetailsInfo!)) * 24000)} đ"
+                                        : "")
+                                    : "",
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
+                        )),
+                  ),
                 ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
