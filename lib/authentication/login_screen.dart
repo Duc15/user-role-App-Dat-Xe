@@ -16,28 +16,33 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  TextEditingController emailTextEditingController = TextEditingController();
-  TextEditingController passwordTextEditingController = TextEditingController();
-  CommonMethods cMethods = CommonMethods();
+  final TextEditingController emailTextEditingController =
+      TextEditingController();
+  final TextEditingController passwordTextEditingController =
+      TextEditingController();
+  final CommonMethods cMethods = CommonMethods();
 
-  checkIfNetworkIsAvailable() {
-    cMethods.checkConnectivity(context);
+  String? emailError, passwordError;
 
-    signInFormValidation();
-  }
+  void validateForm() {
+    setState(() {
+      emailError = null;
+      passwordError = null;
+    });
 
-  signInFormValidation() {
     if (!emailTextEditingController.text.contains("@")) {
-      cMethods.displaySnackBar("Vui lòng nhập đúng định dạng email.", context);
-    } else if (passwordTextEditingController.text.trim().length < 5) {
-      cMethods.displaySnackBar(
-          "Mật khẩu phải lớn hơn hoặc bằng 6 ký tự !", context);
-    } else {
+      emailError = "Vui lòng nhập đúng định dạng email.";
+    }
+    if (passwordTextEditingController.text.trim().length < 6) {
+      passwordError = "Mật khẩu phải lớn hơn hoặc bằng 6 ký tự.";
+    }
+
+    if ([emailError, passwordError].every((e) => e == null)) {
       signInUser();
     }
   }
 
-  signInUser() async {
+  Future<void> signInUser() async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -45,44 +50,78 @@ class _LoginScreenState extends State<LoginScreen> {
           LoadingDialog(messageText: "Đang đăng nhập..."),
     );
 
-    final User? userFirebase = (await FirebaseAuth.instance
-            .signInWithEmailAndPassword(
-      email: emailTextEditingController.text.trim(),
-      password: passwordTextEditingController.text.trim(),
-    )
-            .catchError((errorMsg) {
+    try {
+      final User? userFirebase =
+          (await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: emailTextEditingController.text.trim(),
+        password: passwordTextEditingController.text.trim(),
+      ))
+              .user;
+
+      if (!context.mounted) return;
       Navigator.pop(context);
-      cMethods.displaySnackBar(errorMsg.toString(), context);
-    }))
-        .user;
 
-    if (!context.mounted) return;
-    Navigator.pop(context);
+      if (userFirebase != null) {
+        DatabaseReference usersRef = FirebaseDatabase.instance
+            .ref()
+            .child("users")
+            .child(userFirebase.uid);
+        final snap = await usersRef.once();
 
-    if (userFirebase != null) {
-      DatabaseReference usersRef = FirebaseDatabase.instance
-          .ref()
-          .child("users")
-          .child(userFirebase.uid);
-      await usersRef.once().then((snap) {
         if (snap.snapshot.value != null) {
           if ((snap.snapshot.value as Map)["blockStatus"] == "no") {
             userName = (snap.snapshot.value as Map)["name"];
             userPhone = (snap.snapshot.value as Map)["phone"];
-            Navigator.push(
-                context, MaterialPageRoute(builder: (c) => HomePage()));
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (c) => const HomePage()),
+            );
           } else {
             FirebaseAuth.instance.signOut();
             cMethods.displaySnackBar(
-                "Bạn đã bị chặn. Vui lòng liên hệ admin: pm02duc@gmail.com để được mở tài khoản !",
-                context);
+                "Tài khoản bị khóa. Liên hệ: pm02duc@gmail.com.", context);
           }
         } else {
           FirebaseAuth.instance.signOut();
-          cMethods.displaySnackBar("Hồ sơ của bạn không tồn tại", context);
+          cMethods.displaySnackBar("Hồ sơ của bạn không tồn tại.", context);
         }
-      });
+      }
+    } catch (error) {
+      Navigator.pop(context);
+      cMethods.displaySnackBar(error.toString(), context);
     }
+  }
+
+  Widget _buildTextField({
+    required String label,
+    required TextEditingController controller,
+    String? errorText,
+    bool obscureText = false,
+    TextInputType keyboardType = TextInputType.text,
+    IconData? icon,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: TextField(
+        controller: controller,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: icon != null ? Icon(icon) : null,
+          errorText: errorText,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.blue),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: Colors.red),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -90,91 +129,74 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              Image.asset("assets/images/logo.png"),
-
+              const SizedBox(height: 40),
+              Image.asset(
+                "assets/images/logo.png",
+                height: 100,
+              ),
+              const SizedBox(height: 20),
               const Text(
                 "Đăng nhập",
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
                 ),
               ),
-
-              //text fields + button
-              Padding(
-                padding: const EdgeInsets.all(22),
-                child: Column(
-                  children: [
-                    TextField(
-                      controller: emailTextEditingController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: "Email",
-                        labelStyle: TextStyle(
-                          fontSize: 14,
-                        ),
-                      ),
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(
-                      height: 22,
-                    ),
-                    TextField(
-                      controller: passwordTextEditingController,
-                      obscureText: true,
-                      keyboardType: TextInputType.text,
-                      decoration: const InputDecoration(
-                        labelText: "Mật khẩu",
-                        labelStyle: TextStyle(
-                          fontSize: 14,
-                        ),
-                      ),
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(
-                      height: 32,
-                    ),
-                    ElevatedButton(
-                      onPressed: () {
-                        checkIfNetworkIsAvailable();
-                      },
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 80, vertical: 10)),
-                      child: const Text(
-                        "Đăng nhập",
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ],
+              const SizedBox(height: 30),
+              _buildTextField(
+                label: "Email",
+                controller: emailTextEditingController,
+                errorText: emailError,
+                keyboardType: TextInputType.emailAddress,
+                icon: Icons.email,
+              ),
+              _buildTextField(
+                label: "Mật khẩu",
+                controller: passwordTextEditingController,
+                errorText: passwordError,
+                obscureText: true,
+                icon: Icons.lock,
+              ),
+              const SizedBox(height: 30),
+              ElevatedButton(
+                onPressed: validateForm,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text(
+                  "Đăng nhập",
+                  style: TextStyle(color: Colors.white, fontSize: 18),
                 ),
               ),
-
-              const SizedBox(
-                height: 12,
-              ),
-
-              //textbutton
+              const SizedBox(height: 20),
               TextButton(
                 onPressed: () {
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (c) => SignUpScreen()));
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (c) => const SignUpScreen()),
+                  );
                 },
-                child: const Text(
-                  "Bạn chưa có tài khoản? Đăng ký ngay !",
-                  style: TextStyle(
-                    color: Colors.grey,
+                child: const Text.rich(
+                  TextSpan(
+                    text: "Bạn chưa có tài khoản? ",
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                    children: [
+                      TextSpan(
+                        text: "Đăng ký ngay!",
+                        style: TextStyle(
+                          color: Colors.blue,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
