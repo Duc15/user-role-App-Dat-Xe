@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "299269538562",
+    "firebase_url": "https://app-dat-xe-38f38-default-rtdb.firebaseio.com",
+    "project_id": "app-dat-xe-38f38",
+    "storage_bucket": "app-dat-xe-38f38.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:299269538562:android:b8b7c1b4d587729724381b",
+        "android_client_info": {
+          "package_name": "com.example.drivers_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjwKlb5YQpxLdX3haAb9Ed_QoJqYWEGA8"
+        },
+        {
+          "current_key": "AIzaSyCtUPemEEBkATvPCNeZcf4ZYt1EBV4AV6c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:299269538562:android:0a7d8ce1cf70712024381b",
+        "android_client_info": {
+          "package_name": "com.example.users_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjwKlb5YQpxLdX3haAb9Ed_QoJqYWEGA8"
+        },
+        {
+          "current_key": "AIzaSyCtUPemEEBkATvPCNeZcf4ZYt1EBV4AV6c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
